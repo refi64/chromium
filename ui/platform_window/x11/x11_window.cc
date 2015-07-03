@@ -299,6 +299,8 @@ void X11Window::ToggleFullscreen() {
   state_ = new_state;
   SetFullscreen(fullscreen);
 
+  SetBypassCompositor(fullscreen);
+
   if (unmaximize_and_remaximize)
     Maximize();
 
