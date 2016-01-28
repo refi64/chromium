@@ -165,9 +165,8 @@ void TabManager::Start() {
   delegate_->StartPeriodicOOMScoreUpdate();
 #endif
 
-// MemoryPressureMonitor is not implemented on Linux so far and tabs are never
-// discarded.
-#if defined(OS_WIN) || defined(OS_MAC) || BUILDFLAG(IS_CHROMEOS_ASH)
+#if defined(OS_WIN) || defined(OS_MAC) || BUILDFLAG(IS_CHROMEOS_ASH) || \
+    defined(OS_LINUX)
   // Don't handle memory pressure events here if this is done by
   // PerformanceManager.
   if (!base::FeatureList::IsEnabled(
