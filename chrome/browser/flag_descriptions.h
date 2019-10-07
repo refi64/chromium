@@ -2062,12 +2062,16 @@ extern const char kVideoToolboxVp9DecodingDescription[];
 
 #endif  // defined(OS_MAC)
 
-// Chrome OS ------------------------------------------------------------------
-
-#if defined(OS_CHROMEOS)
+#if defined(OS_LINUX) && !defined(OS_ANDROID)
 
 extern const char kAcceleratedMjpegDecodeName[];
 extern const char kAcceleratedMjpegDecodeDescription[];
+
+#endif
+
+// Chrome OS ------------------------------------------------------------------
+
+#if defined(OS_CHROMEOS)
 
 extern const char kAggregatedMlAppRankingName[];
 extern const char kAggregatedMlAppRankingDescription[];
