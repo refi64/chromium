@@ -58,6 +58,7 @@ unsigned int GetVaFormatForVideoCodecProfile(VideoCodecProfile profile) {
   return VA_RT_FORMAT_YUV420;
 }
 
+#if !defined(OS_X11)
 // Returns true if the CPU is an Intel Gemini Lake or later (including Kaby
 // Lake) Cpu platform id's are referenced from the following file in kernel
 // source arch/x86/include/asm/intel-family.h
@@ -70,6 +71,7 @@ bool IsGeminiLakeOrLater() {
       cpuid.model() >= kGeminiLakeModelId;
   return is_geminilake_or_later;
 }
+#endif
 
 }  // namespace
 
@@ -680,10 +682,11 @@ void VaapiVideoDecodeAccelerator::AssignPictureBuffers(
 
   available_picture_buffers_.clear();
 
-  RETURN_AND_NOTIFY_ON_FAILURE(
-      buffers.size() >= requested_num_pics_,
-      "Got an invalid number of picture buffers. (Got " << buffers.size()
-      << ", requested " << requested_num_pics_ << ")", INVALID_ARGUMENT, );
+  RETURN_AND_NOTIFY_ON_FAILURE(buffers.size() >= requested_num_pics_,
+                               "Got an invalid number of picture buffers. (Got "
+                                   << buffers.size() << ", requested "
+                                   << requested_num_pics_ << ")",
+                               INVALID_ARGUMENT, );
   // requested_pic_size_ can be adjusted by VDA client. We should update
   // |requested_pic_size_| by buffers[0].size(). But AMD driver doesn't decode
   // frames correctly if the surface stride is different from the width of a
@@ -1201,13 +1204,7 @@ VaapiVideoDecodeAccelerator::DecideBufferAllocationMode() {
   DCHECK_NE(output_mode_, VideoDecodeAccelerator::Config::OutputMode::IMPORT);
   // TODO(crbug/1116701): get video decode acceleration working with ozone.
   DCHECK(!features::IsUsingOzonePlatform());
-  // For H.264 on older devices, another +1 is experimentally needed for
-  // high-to-high resolution changes.
-  // TODO(mcasas): Figure out why and why only H264, see crbug.com/912295 and
-  // http://crrev.com/c/1363807/9/media/gpu/h264_decoder.cc#1449.
-  if (profile_ >= H264PROFILE_MIN && profile_ <= H264PROFILE_MAX)
-    return BufferAllocationMode::kReduced;
-  return BufferAllocationMode::kSuperReduced;
+  return BufferAllocationMode::kNormal;
 #else
   // TODO(crbug.com/912295): Enable a better BufferAllocationMode for IMPORT
   // |output_mode_| as well.

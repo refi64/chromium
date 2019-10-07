@@ -447,6 +447,11 @@ void VADisplayState::PreSandboxInitialization() {
       base::File::FLAG_OPEN | base::File::FLAG_READ | base::File::FLAG_WRITE);
   if (drm_file.IsValid())
     VADisplayState::Get()->SetDrmFd(drm_file.GetPlatformFile());
+
+  const char kNvidiaPath[] = "/dev/dri/nvidiactl";
+  base::File nvidia_file = base::File(
+      base::FilePath::FromUTF8Unsafe(kNvidiaPath),
+      base::File::FLAG_OPEN | base::File::FLAG_READ | base::File::FLAG_WRITE);
 }
 
 VADisplayState::VADisplayState()
@@ -474,10 +479,6 @@ bool VADisplayState::Initialize() {
 }
 
 bool VADisplayState::InitializeOnce() {
-  static_assert(
-      VA_MAJOR_VERSION >= 2 || (VA_MAJOR_VERSION == 1 && VA_MINOR_VERSION >= 1),
-      "Requires VA-API >= 1.1.0");
-
   switch (gl::GetGLImplementation()) {
     case gl::kGLImplementationEGLGLES2:
       va_display_ = vaGetDisplayDRM(drm_fd_.get());
@@ -496,6 +497,7 @@ bool VADisplayState::InitializeOnce() {
       if (!features::IsUsingOzonePlatform())
         va_display_ = vaGetDisplay(gfx::GetXDisplay());
 #endif  // USE_X11
+      va_display_ = vaGetDisplayDRM(drm_fd_.get());
       break;
     // Cannot infer platform from GL, try all available displays
     case gl::kGLImplementationNone:
@@ -543,8 +545,21 @@ bool VADisplayState::InitializeOnce() {
   int major_version, minor_version;
   VAStatus va_res = vaInitialize(va_display_, &major_version, &minor_version);
   if (va_res != VA_STATUS_SUCCESS) {
-    LOG(ERROR) << "vaInitialize failed: " << vaErrorStr(va_res);
-    return false;
+    LOG(ERROR)
+        << "vaInitialize failed (ignore if using Wayland desktop environment): "
+        << vaErrorStr(va_res);
+    va_display_ = vaGetDisplayDRM(drm_fd_.get());
+    if (!vaDisplayIsValid(va_display_)) {
+      LOG(ERROR) << "Could not get a valid DRM VA display";
+      return false;
+    }
+    va_res = vaInitialize(va_display_, &major_version, &minor_version);
+    if (va_res != VA_STATUS_SUCCESS) {
+      LOG(ERROR) << "vaInitialize failed using DRM: " << vaErrorStr(va_res);
+      return false;
+    } else {
+      LOG(WARNING) << "vaInitialize succeeded for DRM";
+    }
   }
 
   va_initialized_ = true;
@@ -552,8 +567,8 @@ bool VADisplayState::InitializeOnce() {
   const std::string va_vendor_string = vaQueryVendorString(va_display_);
   DLOG_IF(WARNING, va_vendor_string.empty())
       << "Vendor string empty or error reading.";
-  DVLOG(1) << "VAAPI version: " << major_version << "." << minor_version << " "
-           << va_vendor_string;
+  VLOG(1) << "VAAPI version: " << major_version << "." << minor_version << " "
+          << va_vendor_string;
   implementation_type_ = VendorStringToImplementationType(va_vendor_string);
 
   // The VAAPI version is determined from what is loaded on the system by
@@ -565,8 +580,8 @@ bool VADisplayState::InitializeOnce() {
   if (VA_MAJOR_VERSION > major_version ||
       (VA_MAJOR_VERSION == major_version && VA_MINOR_VERSION > minor_version)) {
     LOG(ERROR) << "The system version " << major_version << "." << minor_version
-               << " should be greater than or equal to "
-               << VA_MAJOR_VERSION << "." << VA_MINOR_VERSION;
+               << " should be greater than or equal to " << VA_MAJOR_VERSION
+               << "." << VA_MINOR_VERSION;
     return false;
   }
   return true;
@@ -741,8 +756,8 @@ bool AreAttribsSupported(const base::Lock* va_lock,
     if (attribs[i].type != required_attribs[i].type ||
         (attribs[i].value & required_attribs[i].value) !=
             required_attribs[i].value) {
-      DVLOG(1) << "Unsupported value " << required_attribs[i].value
-               << " for attribute type " << required_attribs[i].type;
+      VLOG(1) << "Unsupported value " << required_attribs[i].value
+              << " for attribute type " << required_attribs[i].type;
       return false;
     }
   }
@@ -939,7 +954,7 @@ bool VASupportedProfiles::FillProfileInfo_Locked(
                        false);
 
   profile_info->va_profile = va_profile;
-  profile_info->va_entrypoint  = entrypoint;
+  profile_info->va_entrypoint = entrypoint;
   profile_info->min_resolution = gfx::Size();
   profile_info->max_resolution = gfx::Size();
   for (const auto& attrib : attrib_list) {
@@ -1164,11 +1179,8 @@ bool VASupportedImageFormats::InitSupportedImageFormats_Locked() {
 
 bool IsLowPowerEncSupported(VAProfile va_profile) {
   constexpr VAProfile kSupportedLowPowerEncodeProfiles[] = {
-      VAProfileH264ConstrainedBaseline,
-      VAProfileH264Main,
-      VAProfileH264High,
-      VAProfileVP9Profile0,
-      VAProfileVP9Profile2};
+      VAProfileH264ConstrainedBaseline, VAProfileH264Main, VAProfileH264High,
+      VAProfileVP9Profile0, VAProfileVP9Profile2};
   if (!base::Contains(kSupportedLowPowerEncodeProfiles, va_profile))
     return false;
 
@@ -1877,12 +1889,9 @@ bool VaapiWrapper::PutSurfaceIntoPixmap(VASurfaceID va_surface_id,
   VA_SUCCESS_OR_RETURN(va_res, VaapiFunctions::kVASyncSurface, false);
 
   // Put the data into an X Pixmap.
-  va_res = vaPutSurface(va_display_,
-                        va_surface_id,
-                        x_pixmap,
-                        0, 0, dest_size.width(), dest_size.height(),
-                        0, 0, dest_size.width(), dest_size.height(),
-                        NULL, 0, 0);
+  va_res = vaPutSurface(va_display_, va_surface_id, x_pixmap, 0, 0,
+                        dest_size.width(), dest_size.height(), 0, 0,
+                        dest_size.width(), dest_size.height(), NULL, 0, 0);
   VA_SUCCESS_OR_RETURN(va_res, VaapiFunctions::kVAPutSurface, false);
   return true;
 }
@@ -2104,9 +2113,8 @@ bool VaapiWrapper::GetVAEncMaxNumOfRefFrames(VideoCodecProfile profile,
   attrib.type = VAConfigAttribEncMaxRefFrames;
 
   base::AutoLock auto_lock(*va_lock_);
-  VAStatus va_res =
-      vaGetConfigAttributes(va_display_, va_profile,
-                            va_entrypoint_, &attrib, 1);
+  VAStatus va_res = vaGetConfigAttributes(va_display_, va_profile,
+                                          va_entrypoint_, &attrib, 1);
   VA_SUCCESS_OR_RETURN(va_res, VaapiFunctions::kVAGetConfigAttributes, false);
 
   *max_ref_frames = attrib.value;
