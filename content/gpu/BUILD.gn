@@ -4,7 +4,9 @@
 
 import("//build/config/ui.gni")
 import("//gpu/vulkan/features.gni")
+import("//media/gpu/args.gni")
 import("//media/media_options.gni")
+import("//ui/ozone/ozone.gni")
 
 # This file depends on the legacy global sources assignment filter. It should
 # be converted to check target platform before assigning source files to the
@@ -132,5 +134,9 @@ target(link_target_type, "gpu_sources") {
   if (current_cpu != "s390x" && current_cpu != "ppc64" && is_desktop_linux &&
       (!is_chromecast || is_cast_desktop_build)) {
     configs += [ "//build/config/linux/dri" ]
+  }
+
+  if (is_desktop_linux && use_vaapi) {
+    public_configs = [ "//build/config/linux/libva" ]
   }
 }
