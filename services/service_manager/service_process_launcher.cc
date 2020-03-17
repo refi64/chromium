@@ -37,6 +37,7 @@
 #include "services/service_manager/switches.h"
 
 #if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#include "sandbox/linux/services/flatpak_sandbox.h"
 #include "sandbox/linux/services/namespace_sandbox.h"
 #endif
 
@@ -270,8 +271,15 @@ void ServiceProcessLauncher::ProcessState::StopInBackground() {
     return;
 
   int rv = -1;
-  LOG_IF(ERROR, !child_process_.WaitForExit(&rv))
-      << "Failed to wait for child process";
+  bool success = false;
+  auto* flatpak_sandbox = sandbox::FlatpakSandbox::GetInstance();
+  if (flatpak_sandbox->IsPidSandboxed(child_process_.Pid())) {
+    success = flatpak_sandbox->Wait(child_process_.Pid(), &rv);
+  } else {
+    success = child_process_.WaitForExit(&rv);
+  }
+  LOG_IF(ERROR, success) << "Failed to wait for child process";
+
   child_process_.Close();
 }
 
