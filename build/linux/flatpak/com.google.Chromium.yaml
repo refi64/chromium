@@ -1,0 +1,29 @@
+app-id: com.google.Chromium
+runtime: org.freedesktop.Platform
+runtime-version: '19.08'
+sdk: org.freedesktop.Sdk
+command: /app/chrome/chrome
+finish-args:
+  - '--device=dri'
+  - '--share=ipc'
+  - '--share=network'
+  - '--socket=pulseaudio'
+  - '--socket=x11'
+  - '--talk-name=org.freedesktop.Notifications'
+  - '--talk-name=org.freedesktop.secrets'
+  - '--talk-name=org.freedesktop.UPower'
+  - '--talk-name=org.gnome.SessionManager'
+  - '--filesystem=home'
+  - '--talk-name=ca.desrt.dconf'
+  - '--env=DCONF_USER_CONFIG_DIR=.config/dconf'
+
+# The files are manually added in create_flatpak_bundle.py to avoid repeated, slow copying.
+modules:
+  - name: libsecret
+    config-opts:
+      - '--enable-shared'
+      - '--disable-static'
+    sources:
+      - type: archive
+        url: https://ftp.gnome.org/pub/GNOME/sources/libsecret/0.18/libsecret-0.18.8.tar.xz
+        sha256: 3bfa889d260e0dbabcf5b9967f2aae12edcd2ddc9adc365de7a5cc840c311d15

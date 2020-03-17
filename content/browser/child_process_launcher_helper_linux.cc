@@ -20,6 +20,7 @@
 #include "services/service_manager/zygote/common/zygote_handle.h"
 #include "services/service_manager/zygote/host/zygote_communication_linux.h"
 #include "services/service_manager/zygote/host/zygote_host_impl_linux.h"
+#include "sandbox/linux/services/flatpak_sandbox.h"
 
 namespace content {
 namespace internal {
@@ -101,7 +102,21 @@ ChildProcessLauncherHelper::LaunchProcessOnLauncherThread(
   }
 
   Process process;
-  process.process = base::LaunchProcess(*command_line(), options);
+  if (sandbox::FlatpakSandbox::GetInstance()->GetSandboxLevel()
+          != sandbox::FlatpakSandbox::SandboxLevel::kNone) {
+    auto* flatpak_sandbox = sandbox::FlatpakSandbox::GetInstance();
+    // Only the GPU process needs access to the Xorg display.
+    bool allow_x11 = GetProcessType() == switches::kGpuProcess;
+
+    base::ProcessId id = flatpak_sandbox->LaunchProcess(
+          *command_line(), options, allow_x11);
+    if (id != base::kNullProcessId) {
+      process.process = flatpak_sandbox->GetRelativePid(id);
+      process.flatpak_host_pid = id;
+    }
+  } else {
+    process.process = base::LaunchProcess(*command_line(), options);
+  }
   *launch_result = process.process.IsValid() ? LAUNCH_RESULT_SUCCESS
                                              : LAUNCH_RESULT_FAILURE;
   return process;
@@ -119,6 +134,15 @@ ChildProcessTerminationInfo ChildProcessLauncherHelper::GetTerminationInfo(
   if (process.zygote) {
     info.status = process.zygote->GetTerminationStatus(
         process.process.Handle(), known_dead, &info.exit_code);
+  } else if (process.flatpak_host_pid) {
+    auto* flatpak_sandbox = sandbox::FlatpakSandbox::GetInstance();
+    if (known_dead) {
+      info.status = flatpak_sandbox->GetKnownDeadTerminationStatus(
+          process.flatpak_host_pid, &info.exit_code);
+    } else {
+      info.status = flatpak_sandbox->GetTerminationStatus(
+          process.flatpak_host_pid, &info.exit_code);
+    }
   } else if (known_dead) {
     info.status = base::GetKnownDeadTerminationStatus(process.process.Handle(),
                                                       &info.exit_code);
@@ -141,6 +165,12 @@ bool ChildProcessLauncherHelper::TerminateProcess(const base::Process& process,
 void ChildProcessLauncherHelper::ForceNormalProcessTerminationSync(
     ChildProcessLauncherHelper::Process process) {
   DCHECK(CurrentlyOnProcessLauncherTaskRunner());
+  if (process.flatpak_host_pid) {
+    auto* flatpak_sandbox = sandbox::FlatpakSandbox::GetInstance();
+    flatpak_sandbox->ForceTermination(process.flatpak_host_pid);
+    return;
+  }
+
   process.process.Terminate(service_manager::RESULT_CODE_NORMAL_EXIT, false);
   // On POSIX, we must additionally reap the child.
   if (process.zygote) {
