@@ -321,6 +321,10 @@ if (is_linux || is_chromeos) {
 
 component("sandbox_services") {
   sources = [
+    "services/flatpak_pid_map.cc",
+    "services/flatpak_pid_map.h",
+    "services/flatpak_sandbox.cc",
+    "services/flatpak_sandbox.h",
     "services/init_process_reaper.cc",
     "services/init_process_reaper.h",
     "services/proc_util.cc",
@@ -355,7 +359,10 @@ component("sandbox_services") {
 
   defines = [ "SANDBOX_IMPLEMENTATION" ]
 
-  public_deps = [ "//sandbox:sandbox_export" ]
+  public_deps = [
+    "//sandbox:sandbox_export",
+    "//dbus",
+  ]
   deps = [
     "//base",
     "//base/third_party/dynamic_annotations",

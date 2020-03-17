@@ -14,6 +14,7 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
+#include "sandbox/policy/linux/sandbox_linux.h"
 
 #if defined(OS_WIN)
 #include "chrome/browser/ui/webui/sandbox/sandbox_handler.h"
@@ -39,6 +40,8 @@ static void SetSandboxStatusData(content::WebUIDataSource* source) {
 
   source->AddBoolean("suid", status & sandbox::policy::SandboxLinux::kSUID);
   source->AddBoolean("userNs", status & sandbox::policy::SandboxLinux::kUserNS);
+  source->AddBoolean("flatpak",
+                     status & sandbox::policy::SandboxLinux::kFlatpak);
   source->AddBoolean("pidNs", status & sandbox::policy::SandboxLinux::kPIDNS);
   source->AddBoolean("netNs", status & sandbox::policy::SandboxLinux::kNetNS);
   source->AddBoolean("seccompBpf",
@@ -56,7 +59,8 @@ static void SetSandboxStatusData(content::WebUIDataSource* source) {
 
   // Require either the setuid or namespace sandbox for our first-layer sandbox.
   bool good_layer1 = (status & sandbox::policy::SandboxLinux::kSUID ||
-                      status & sandbox::policy::SandboxLinux::kUserNS) &&
+                      status & sandbox::policy::SandboxLinux::kUserNS ||
+                      status & sandbox::policy::SandboxLinux::kFlatpak) &&
                      status & sandbox::policy::SandboxLinux::kPIDNS &&
                      status & sandbox::policy::SandboxLinux::kNetNS;
   // A second-layer sandbox is also required to be adequately sandboxed.

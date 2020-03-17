@@ -142,6 +142,7 @@ function androidHandler() {
 function linuxHandler() {
   const suidSandbox = loadTimeData.getBoolean('suid');
   const nsSandbox = loadTimeData.getBoolean('userNs');
+  const flatpakSandbox = loadTimeData.getBoolean('flatpak');
 
   let layer1SandboxType = 'None';
   let layer1SandboxCssClass = StatusClass.BAD;
@@ -150,6 +151,9 @@ function linuxHandler() {
     layer1SandboxCssClass = StatusClass.MEDIUM;
   } else if (nsSandbox) {
     layer1SandboxType = 'Namespace';
+    layer1SandboxCssClass = StatusClass.GOOD;
+  } else if (flatpakSandbox) {
+    layer1SandboxType = 'Flatpak';
     layer1SandboxCssClass = StatusClass.GOOD;
   }
 
