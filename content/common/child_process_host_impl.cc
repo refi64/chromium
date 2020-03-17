@@ -40,6 +40,7 @@
 
 #if defined(OS_LINUX) || defined(OS_CHROMEOS)
 #include "base/linux_util.h"
+#include "sandbox/linux/services/flatpak_sandbox.h"
 #elif defined(OS_MAC)
 #include "base/mac/foundation_util.h"
 #include "content/common/mac_helpers.h"
@@ -75,7 +76,12 @@ base::FilePath ChildProcessHost::GetChildPath(int flags) {
 #if defined(OS_LINUX) || defined(OS_CHROMEOS)
   // Use /proc/self/exe rather than our known binary path so updates
   // can't swap out the binary from underneath us.
-  if (child_path.empty() && flags & CHILD_ALLOW_SELF)
+  // This is not needed for Flatpaks, where updates are going to be in
+  // a new hardlink tree.
+  if ((child_path.empty() &&
+       sandbox::FlatpakSandbox::GetInstance()->GetSandboxLevel() ==
+           sandbox::FlatpakSandbox::SandboxLevel::kNone) &&
+      flags & CHILD_ALLOW_SELF)
     child_path = base::FilePath(base::kProcSelfExe);
 #endif
 
@@ -302,7 +308,7 @@ bool ChildProcessHostImpl::OnMessageReceived(const IPC::Message& msg) {
   }
 
   if (!handled) {
-      handled = delegate_->OnMessageReceived(msg);
+    handled = delegate_->OnMessageReceived(msg);
   }
 
 #if BUILDFLAG(IPC_MESSAGE_LOG_ENABLED)
@@ -316,7 +322,7 @@ void ChildProcessHostImpl::OnChannelConnected(int32_t peer_pid) {
   if (!peer_process_.IsValid()) {
     peer_process_ = base::Process::OpenWithExtraPrivileges(peer_pid);
     if (!peer_process_.IsValid())
-       peer_process_ = delegate_->GetProcess().Duplicate();
+      peer_process_ = delegate_->GetProcess().Duplicate();
     DCHECK(peer_process_.IsValid());
   }
   opening_channel_ = false;
