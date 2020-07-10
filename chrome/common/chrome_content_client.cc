@@ -385,7 +385,7 @@ std::unique_ptr<content::CdmInfo> CreateCdmInfoFromWidevineDirectory(
         // BUILDFLAG(ENABLE_WIDEVINE_CDM_COMPONENT)) && (defined(OS_LINUX) ||
         // defined(OS_CHROMEOS))
 
-#if BUILDFLAG(BUNDLE_WIDEVINE_CDM) && \
+#if BUILDFLAG(ENABLE_WIDEVINE_CDM_COMPONENT) && \
     (defined(OS_LINUX) || defined(OS_CHROMEOS))
 // On Linux/ChromeOS we have to preload the CDM since it uses the zygote
 // sandbox. On Windows and Mac, the bundled CDM is handled by the component
@@ -454,7 +454,7 @@ content::CdmInfo* GetBundledWidevine() {
       }());
   return s_cdm_info->get();
 }
-#endif  // BUILDFLAG(BUNDLE_WIDEVINE_CDM) && (defined(OS_LINUX) ||
+#endif  // BUILDFLAG(ENABLE_WIDEVINE_CDM_COMPONENT) && (defined(OS_LINUX) ||
         // defined(OS_CHROMEOS))
 
 #if BUILDFLAG(ENABLE_WIDEVINE_CDM_COMPONENT) && \
@@ -615,7 +615,7 @@ void ChromeContentClient::AddContentDecryptionModules(
     // case both versions will be the same and point to the same directory, so
     // it doesn't matter which one is loaded.
     content::CdmInfo* bundled_widevine = nullptr;
-#if BUILDFLAG(BUNDLE_WIDEVINE_CDM)
+#if BUILDFLAG(ENABLE_WIDEVINE_CDM_COMPONENT)
     bundled_widevine = GetBundledWidevine();
 #endif
 
