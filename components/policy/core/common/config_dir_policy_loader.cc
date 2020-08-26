@@ -22,6 +22,10 @@
 #include "components/policy/core/common/policy_load_status.h"
 #include "components/policy/core/common/policy_types.h"
 
+#if defined(OS_LINUX)
+#include "sandbox/linux/services/flatpak_sandbox.h"
+#endif
+
 namespace policy {
 
 namespace {
@@ -31,6 +35,11 @@ constexpr base::FilePath::CharType kMandatoryConfigDir[] =
     FILE_PATH_LITERAL("managed");
 constexpr base::FilePath::CharType kRecommendedConfigDir[] =
     FILE_PATH_LITERAL("recommended");
+  
+#if defined(OS_LINUX)
+constexpr base::FilePath::CharType kFlatpakConfigSuffix[] =
+    FILE_PATH_LITERAL("policy");
+#endif
 
 PolicyLoadStatus JsonErrorToPolicyLoadStatus(int status) {
   switch (status) {
@@ -67,18 +76,18 @@ void ConfigDirPolicyLoader::InitOnBackgroundThread() {
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
   base::FilePathWatcher::Callback callback = base::BindRepeating(
       &ConfigDirPolicyLoader::OnFileUpdated, base::Unretained(this));
-  mandatory_watcher_.Watch(config_dir_.Append(kMandatoryConfigDir), false,
+  mandatory_watcher_.Watch(GetPolicySubdir(kMandatoryConfigDir), false,
                            callback);
-  recommended_watcher_.Watch(config_dir_.Append(kRecommendedConfigDir), false,
+  recommended_watcher_.Watch(GetPolicySubdir(kRecommendedConfigDir), false,
                              callback);
 }
 
 std::unique_ptr<PolicyBundle> ConfigDirPolicyLoader::Load() {
   std::unique_ptr<PolicyBundle> bundle(new PolicyBundle());
-  LoadFromPath(config_dir_.Append(kMandatoryConfigDir),
+  LoadFromPath(GetPolicySubdir(kMandatoryConfigDir),
                POLICY_LEVEL_MANDATORY,
                bundle.get());
-  LoadFromPath(config_dir_.Append(kRecommendedConfigDir),
+  LoadFromPath(GetPolicySubdir(kRecommendedConfigDir),
                POLICY_LEVEL_RECOMMENDED,
                bundle.get());
   return bundle;
@@ -93,7 +102,7 @@ base::Time ConfigDirPolicyLoader::LastModificationTime() {
   base::File::Info info;
 
   for (size_t i = 0; i < base::size(kConfigDirSuffixes); ++i) {
-    base::FilePath path(config_dir_.Append(kConfigDirSuffixes[i]));
+    base::FilePath path(GetPolicySubdir(kConfigDirSuffixes[i]));
 
     // Skip if the file doesn't exist, or it isn't a directory.
     if (!base::GetFileInfo(path, &info) || !info.is_directory)
@@ -111,6 +120,19 @@ base::Time ConfigDirPolicyLoader::LastModificationTime() {
   }
 
   return last_modification;
+}
+
+base::FilePath ConfigDirPolicyLoader::GetPolicySubdir(
+    const base::FilePath::CharType* subdir) {
+  base::FilePath result = config_dir_.Append(subdir);
+#if defined(OS_LINUX)
+  // This is a bad place for this code!
+  if (sandbox::FlatpakSandbox::GetInstance()->GetSandboxLevel() >
+      sandbox::FlatpakSandbox::SandboxLevel::kNone) {
+      result = result.Append(kFlatpakConfigSuffix);
+  }
+#endif
+  return result;
 }
 
 void ConfigDirPolicyLoader::LoadFromPath(const base::FilePath& path,

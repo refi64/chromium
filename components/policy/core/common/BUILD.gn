@@ -267,6 +267,9 @@ source_set("internal") {
       "cloud/user_cloud_policy_store.h",
     ]
   }
+  if (is_linux) {
+    deps += [ "//sandbox/linux:sandbox_services" ]
+  }
   if (is_apple) {
     sources += [
       "mac_util.cc",

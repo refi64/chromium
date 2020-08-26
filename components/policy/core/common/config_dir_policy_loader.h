@@ -37,6 +37,9 @@ class POLICY_EXPORT ConfigDirPolicyLoader : public AsyncPolicyLoader {
   base::Time LastModificationTime() override;
 
  private:
+  // Gets a policy subdirectory of the main config directory.
+  base::FilePath GetPolicySubdir(const base::FilePath::CharType* subdir);
+
   // Loads the policy files at |path| into the |bundle|, with the given |level|.
   void LoadFromPath(const base::FilePath& path,
                     PolicyLevel level,
