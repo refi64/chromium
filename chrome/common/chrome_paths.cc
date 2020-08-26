@@ -4,6 +4,7 @@
 
 #include "chrome/common/chrome_paths.h"
 
+#include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/native_library.h"
@@ -36,6 +37,10 @@
 
 #if defined(OS_WIN)
 #include "base/win/registry.h"
+#endif
+
+#if defined(OS_LINUX)
+#include "sandbox/linux/services/flatpak_sandbox.h"
 #endif
 
 #if (defined(OS_LINUX) || defined(OS_CHROMEOS)) && BUILDFLAG(ENABLE_WIDEVINE)
@@ -197,8 +202,8 @@ bool PathProvider(int key, base::FilePath* result) {
 #else
       if (!GetUserDownloadsDirectory(&cur))
         return false;
-      // Do not create the download directory here, we have done it twice now
-      // and annoyed a lot of users.
+        // Do not create the download directory here, we have done it twice now
+        // and annoyed a lot of users.
 #endif
       break;
     case chrome::DIR_CRASH_DUMPS:
@@ -371,7 +376,7 @@ bool PathProvider(int key, base::FilePath* result) {
 #if defined(OS_MAC)
       cur = base::mac::FrameworkBundlePath();
       cur = cur.Append(FILE_PATH_LITERAL("Resources"))
-               .Append(FILE_PATH_LITERAL("resources.pak"));
+                .Append(FILE_PATH_LITERAL("resources.pak"));
       break;
 #elif defined(OS_ANDROID)
       if (!base::PathService::Get(ui::DIR_RESOURCE_PAKS_ANDROID, &cur))
@@ -445,6 +450,13 @@ bool PathProvider(int key, base::FilePath* result) {
       break;
 #if defined(OS_POSIX) && !defined(OS_MAC) && !defined(OS_OPENBSD)
     case chrome::DIR_POLICY_FILES: {
+#if defined(OS_LINUX)
+      if (sandbox::FlatpakSandbox::GetInstance()->GetSandboxLevel() >
+          sandbox::FlatpakSandbox::SandboxLevel::kNone) {
+        cur = base::FilePath(FILE_PATH_LITERAL("/app/chromium/policies"));
+        break;
+      }
+#endif
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
       cur = base::FilePath(FILE_PATH_LITERAL("/etc/opt/chrome/policies"));
 #else
@@ -468,7 +480,13 @@ bool PathProvider(int key, base::FilePath* result) {
 #endif
 #if defined(OS_LINUX) || defined(OS_CHROMEOS)
     case chrome::DIR_STANDALONE_EXTERNAL_EXTENSIONS: {
-      cur = base::FilePath(kFilepathSinglePrefExtensions);
+      if (sandbox::FlatpakSandbox::GetInstance()->GetSandboxLevel() >
+          sandbox::FlatpakSandbox::SandboxLevel::kNone) {
+        cur = base::FilePath(
+            FILE_PATH_LITERAL("/app/chromium/extensions/extensions"));
+      } else {
+        cur = base::FilePath(kFilepathSinglePrefExtensions);
+      }
       break;
     }
 #endif
@@ -478,8 +496,8 @@ bool PathProvider(int key, base::FilePath* result) {
         return false;
 
       cur = cur.Append(FILE_PATH_LITERAL("Google"))
-               .Append(FILE_PATH_LITERAL("Chrome"))
-               .Append(FILE_PATH_LITERAL("External Extensions"));
+                .Append(FILE_PATH_LITERAL("Chrome"))
+                .Append(FILE_PATH_LITERAL("External Extensions"));
       create_dir = false;
 #else
       if (!base::PathService::Get(base::DIR_MODULE, &cur))
@@ -505,19 +523,25 @@ bool PathProvider(int key, base::FilePath* result) {
     case chrome::DIR_NATIVE_MESSAGING:
 #if defined(OS_MAC)
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
-      cur = base::FilePath(FILE_PATH_LITERAL(
-           "/Library/Google/Chrome/NativeMessagingHosts"));
+      cur = base::FilePath(
+          FILE_PATH_LITERAL("/Library/Google/Chrome/NativeMessagingHosts"));
 #else
       cur = base::FilePath(FILE_PATH_LITERAL(
           "/Library/Application Support/Chromium/NativeMessagingHosts"));
 #endif
 #else  // defined(OS_MAC)
+      if (sandbox::FlatpakSandbox::GetInstance()->GetSandboxLevel() >
+          sandbox::FlatpakSandbox::SandboxLevel::kNone) {
+        cur = base::FilePath(FILE_PATH_LITERAL(
+            "/app/chromium/native-messaging-hosts/native-messaging-hosts"));
+        break;
+      }
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
-      cur = base::FilePath(FILE_PATH_LITERAL(
-          "/etc/opt/chrome/native-messaging-hosts"));
+      cur = base::FilePath(
+          FILE_PATH_LITERAL("/etc/opt/chrome/native-messaging-hosts"));
 #else
-      cur = base::FilePath(FILE_PATH_LITERAL(
-          "/etc/chromium/native-messaging-hosts"));
+      cur = base::FilePath(
+          FILE_PATH_LITERAL("/etc/chromium/native-messaging-hosts"));
 #endif
 #endif  // !defined(OS_MAC)
       break;
@@ -567,8 +591,7 @@ bool PathProvider(int key, base::FilePath* result) {
 
   // TODO(bauerb): http://crbug.com/259796
   base::ThreadRestrictions::ScopedAllowIO allow_io;
-  if (create_dir && !base::PathExists(cur) &&
-      !base::CreateDirectory(cur))
+  if (create_dir && !base::PathExists(cur) && !base::CreateDirectory(cur))
     return false;
 
   *result = cur;
