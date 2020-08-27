@@ -380,6 +380,14 @@ bool PathProvider(int key, base::FilePath* result) {
 
 #if defined(OS_LINUX) && BUILDFLAG(BUNDLE_WIDEVINE_CDM)
     case chrome::DIR_BUNDLED_WIDEVINE_CDM:
+      if (sandbox::FlatpakSandbox::GetInstance()->GetSandboxLevel() >
+          sandbox::FlatpakSandbox::SandboxLevel::kNone) {
+        cur = base::FilePath(
+            FILE_PATH_LITERAL("/app/widevine/libwidevinecdm.so"));
+        if (base::PathExists(cur)) {
+          break;
+        }
+      }
       if (!GetComponentDirectory(&cur))
         return false;
 #if !defined(OS_CHROMEOS)
