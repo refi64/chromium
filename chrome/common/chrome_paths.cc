@@ -382,9 +382,12 @@ bool PathProvider(int key, base::FilePath* result) {
       break;
 
 #if (defined(OS_LINUX) || defined(OS_CHROMEOS)) && \
-    BUILDFLAG(BUNDLE_WIDEVINE_CDM)
+    BUILDFLAG(ENABLE_WIDEVINE_CDM_COMPONENT)
     case chrome::DIR_BUNDLED_WIDEVINE_CDM:
-      if (!GetComponentDirectory(&cur))
+      if (sandbox::FlatpakSandbox::GetInstance()->GetSandboxLevel() >
+          sandbox::FlatpakSandbox::SandboxLevel::kNone)
+        cur = base::FilePath(FILE_PATH_LITERAL("/app/widevine"));
+      else if (!GetComponentDirectory(&cur))
         return false;
 #if !defined(OS_CHROMEOS)
       // TODO(crbug.com/971433): Move Widevine CDM to a separate folder on
@@ -393,7 +396,7 @@ bool PathProvider(int key, base::FilePath* result) {
 #endif  // !defined(OS_CHROMEOS)
       break;
 #endif  // (defined(OS_LINUX) || defined(OS_CHROMEOS)) &&
-        // BUILDFLAG(BUNDLE_WIDEVINE_CDM)
+        // BUILDFLAG(ENABLE_WIDEVINE_CDM_COMPONENT)
 
 #if defined(OS_LINUX) && !defined(OS_CHROMEOS) && \
     BUILDFLAG(ENABLE_WIDEVINE_CDM_COMPONENT)
