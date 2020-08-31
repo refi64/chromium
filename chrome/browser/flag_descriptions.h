@@ -1968,6 +1968,15 @@ extern const char kTabFreezeDescription[];
 
 #endif  // defined(OS_ANDROID)
 
+// Linux ----------------------------------------------------------------------
+
+#if defined(OS_LINUX)
+
+extern const char kXdgFileChooserPortalName[];
+extern const char kXdgFileChooserPortalDescription[];
+
+#endif  // defined(OS_LINUX)
+
 // Windows --------------------------------------------------------------------
 
 #if defined(OS_WIN)
