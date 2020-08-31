@@ -4927,6 +4927,13 @@ const FeatureEntry kFeatureEntries[] = {
      FEATURE_VALUE_TYPE(features::kVaapiWebPImageDecodeAcceleration)},
 #endif
 
+#if defined(OS_LINUX)
+    {"enable-xdg-file-chooser-portal",
+     flag_descriptions::kXdgFileChooserPortalName,
+     flag_descriptions::kXdgFileChooserPortalDescription, kOsLinux,
+     FEATURE_VALUE_TYPE(features::kXdgFileChooserPortal)},
+#endif  // OS_LINUX
+
 #if defined(OS_WIN)
     {"calculate-native-win-occlusion",
      flag_descriptions::kCalculateNativeWinOcclusionName,

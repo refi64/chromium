@@ -199,7 +199,7 @@ const base::Feature kEnableNewCanvas2DAPI{"EnableNewCanvas2DAPI",
 // media-device enumeration will provide at most one device per type and the
 // device IDs will not be available.
 // TODO(crbug.com/1019176): remove the feature in M89.
-const base::Feature kEnumerateDevicesHideDeviceIDs{
+const base::Feature kEnumerateDevicesHideDeviceIDs {
   "EnumerateDevicesHideDeviceIDs",
 #if defined(OS_ANDROID)
       base::FEATURE_DISABLED_BY_DEFAULT
@@ -914,7 +914,13 @@ const base::Feature kForce60HzRefreshRate{"Force60HzRefreshRate",
 const base::Feature kWebNfc{"WebNFC", base::FEATURE_ENABLED_BY_DEFAULT};
 #endif  // defined(OS_ANDROID)
 
-#if defined(OS_MAC)
+#if defined(OS_LINUX)
+// Enables use of the XDG file chooser portal for file selection.
+const base::Feature kXdgFileChooserPortal{"XdgFileChooserPortal",
+                                          base::FEATURE_DISABLED_BY_DEFAULT};
+#endif  // defined(OS_LINUX)
+
+#if defined(OS_MACOS)
 // Enables caching of media devices for the purpose of enumerating them.
 const base::Feature kDeviceMonitorMac{"DeviceMonitorMac",
                                       base::FEATURE_ENABLED_BY_DEFAULT};
