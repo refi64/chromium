@@ -206,6 +206,10 @@ CONTENT_EXPORT extern const base::Feature kWarmUpNetworkProcess;
 CONTENT_EXPORT extern const base::Feature kWebNfc;
 #endif  // defined(OS_ANDROID)
 
+#if defined(OS_LINUX)
+CONTENT_EXPORT extern const base::Feature kXdgFileChooserPortal;
+#endif
+
 #if defined(OS_MAC)
 CONTENT_EXPORT extern const base::Feature kDeviceMonitorMac;
 CONTENT_EXPORT extern const base::Feature kIOSurfaceCapturer;

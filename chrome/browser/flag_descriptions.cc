@@ -3537,6 +3537,17 @@ const char kTabFreezeDescription[] =
 
 #endif  // !defined(OS_ANDROID)
 
+// Linux -----------------------------------------------------------------------
+
+#if defined(OS_LINUX)
+
+const char kXdgFileChooserPortalName[] = "Use the XDG file chooser portal";
+const char kXdgFileChooserPortalDescription[] =
+    "File selection will use the XDG portal rather than GTK/KDE-specific "
+    "dialogs";
+
+#endif
+
 // Windows ---------------------------------------------------------------------
 
 #if defined(OS_WIN)
