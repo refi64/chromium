@@ -12,6 +12,7 @@
 #include "base/path_service.h"
 #include "base/process/launch.h"
 #include "chrome/browser/first_run/upgrade_util_linux.h"
+#include "chrome/browser/shell_integration_linux.h"
 
 namespace {
 
@@ -22,10 +23,14 @@ double saved_last_modified_time_of_exe = 0;
 namespace upgrade_util {
 
 bool RelaunchChromeBrowserImpl(const base::CommandLine& command_line) {
+  base::CommandLine new_cl(command_line);
+  // TODO: move the code outside the internal namespace.
+  new_cl.SetProgram(shell_integration_linux::internal::GetChromeExePath());
+
   base::LaunchOptions options;
   // Don't set NO_NEW_PRIVS on the relaunched browser process.
   options.allow_new_privs = true;
-  return base::LaunchProcess(command_line, options).IsValid();
+  return base::LaunchProcess(new_cl, options).IsValid();
 }
 
 bool IsUpdatePendingRestart() {
