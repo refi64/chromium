@@ -27,10 +27,6 @@ source_set("hid") {
     "hid_manager_impl.h",
     "hid_service.cc",
     "hid_service.h",
-    "hid_service_mac.cc",
-    "hid_service_mac.h",
-    "hid_service_win.cc",
-    "hid_service_win.h",
   ]
 
   deps = [
@@ -49,6 +45,21 @@ source_set("hid") {
       "input_service_linux.h",
     ]
     deps += [ "//device/udev_linux" ]
+  } else if (is_mac) {
+    sources += [
+      "hid_service_mac.cc",
+      "hid_service_mac.h",
+    ]
+  } else if (is_win) {
+    sources += [
+      "hid_service_win.cc",
+      "hid_service_win.h",
+    ]
+  } else {
+    sources += [
+      "hid_service_stub.cc",
+      "hid_service_stub.h",
+    ]
   }
 
   if (is_chromeos) {

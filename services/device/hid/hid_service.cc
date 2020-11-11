@@ -20,6 +20,8 @@
 #include "services/device/hid/hid_service_mac.h"
 #elif defined(OS_WIN)
 #include "services/device/hid/hid_service_win.h"
+#else
+#include "services/device/hid/hid_service_stub.h"
 #endif
 
 namespace device {
@@ -41,7 +43,7 @@ std::unique_ptr<HidService> HidService::Create() {
 #elif defined(OS_WIN)
   return base::WrapUnique(new HidServiceWin());
 #else
-  return nullptr;
+  return base::WrapUnique(new HidServiceStub());
 #endif
 }
 
