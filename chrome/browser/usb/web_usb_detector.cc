@@ -274,7 +274,7 @@ void WebUsbDetector::OnDeviceManagerConnectionError() {
   client_receiver_.reset();
 
   // Try to reconnect the device manager.
-  Initialize();
+  // Initialize();
 }
 
 void WebUsbDetector::SetDeviceManagerForTesting(
