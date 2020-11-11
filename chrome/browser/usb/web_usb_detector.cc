@@ -275,6 +275,7 @@ void WebUsbDetector::OnDeviceManagerConnectionError() {
   client_receiver_.reset();
 
   // Try to reconnect the device manager.
+  LOG(INFO) << "Restarting USB device manager after connection error";
   Initialize();
 }
 
