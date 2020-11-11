@@ -68,7 +68,6 @@ class CreateChromeApplicationShortcutView : public views::DialogDelegateView {
   base::OnceCallback<void(bool)> close_callback_;
 
   // May be null if the platform doesn't support a particular location.
-  views::Checkbox* desktop_check_box_ = nullptr;
   views::Checkbox* menu_check_box_ = nullptr;
   views::Checkbox* quick_launch_check_box_ = nullptr;
 
