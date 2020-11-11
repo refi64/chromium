@@ -45,29 +45,40 @@ DeviceManagerImpl::~DeviceManagerImpl() = default;
 
 void DeviceManagerImpl::AddReceiver(
     mojo::PendingReceiver<mojom::UsbDeviceManager> receiver) {
-  if (usb_service_)
-    receivers_.Add(this, std::move(receiver));
+  receivers_.Add(this, std::move(receiver));
 }
 
 void DeviceManagerImpl::EnumerateDevicesAndSetClient(
     mojo::PendingAssociatedRemote<mojom::UsbDeviceManagerClient> client,
     EnumerateDevicesAndSetClientCallback callback) {
-  usb_service_->GetDevices(base::BindOnce(
-      &DeviceManagerImpl::OnGetDevices, weak_factory_.GetWeakPtr(),
-      /*options=*/nullptr, std::move(client), std::move(callback)));
+  if (usb_service_) {
+    usb_service_->GetDevices(base::BindOnce(
+        &DeviceManagerImpl::OnGetDevices, weak_factory_.GetWeakPtr(),
+        /*options=*/nullptr, std::move(client), std::move(callback)));
+  } else {
+    OnGetDevices(nullptr, std::move(client), std::move(callback), {});
+  }
 }
 
 void DeviceManagerImpl::GetDevices(mojom::UsbEnumerationOptionsPtr options,
                                    GetDevicesCallback callback) {
-  usb_service_->GetDevices(base::BindOnce(
-      &DeviceManagerImpl::OnGetDevices, weak_factory_.GetWeakPtr(),
-      std::move(options), mojo::NullAssociatedRemote(), std::move(callback)));
+  if (usb_service_) {
+    usb_service_->GetDevices(base::BindOnce(
+        &DeviceManagerImpl::OnGetDevices, weak_factory_.GetWeakPtr(),
+        std::move(options), mojo::NullAssociatedRemote(), std::move(callback)));
+  } else {
+    OnGetDevices(std::move(options), mojo::NullAssociatedRemote(),
+                 std::move(callback), {});
+  }
 }
 
 void DeviceManagerImpl::GetDevice(
     const std::string& guid,
     mojo::PendingReceiver<mojom::UsbDevice> device_receiver,
     mojo::PendingRemote<mojom::UsbDeviceClient> device_client) {
+  if (!usb_service_)
+    return;
+
   scoped_refptr<UsbDevice> device = usb_service_->GetDevice(guid);
   if (!device)
     return;
