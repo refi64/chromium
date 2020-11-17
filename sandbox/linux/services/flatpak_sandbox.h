@@ -9,6 +9,8 @@
 #include "base/compiler_specific.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/files/file_path.h"
+#include "base/files/scoped_file.h"
 #include "base/macros.h"
 #include "base/no_destructor.h"
 #include "base/optional.h"
@@ -35,6 +37,20 @@ namespace sandbox {
 // it is known inside the sandbox's PID namespace.
 class SANDBOX_EXPORT FlatpakSandbox {
  public:
+  class SpawnOptions {
+   public:
+    SpawnOptions() = default;
+    SpawnOptions(const SpawnOptions& other) = delete;
+    SpawnOptions(SpawnOptions&& other) = delete;
+
+    bool ExposePathRo(base::FilePath path);
+
+   private:
+    friend class FlatpakSandbox;
+
+    std::vector<base::ScopedFD> sandbox_expose_ro;
+  };
+
   static FlatpakSandbox* GetInstance();
 
   // Represents the level of sandboxing inside a Flatpak. kNone means this is
@@ -56,7 +72,8 @@ class SANDBOX_EXPORT FlatpakSandbox {
   // GetRelativePid. This is the reason why a vanilla ProcessId is returned
   // rather than a base::Process instance.
   base::Process LaunchProcess(const base::CommandLine& cmdline,
-                              const base::LaunchOptions& launch_options);
+                              const base::LaunchOptions& launch_options,
+                              const SpawnOptions& spawn_options = {});
 
   // Indefinitely waits for the given process and fills the exit code pointer
   // if given and non-null. Returns false on wait failure.
@@ -85,11 +102,13 @@ class SANDBOX_EXPORT FlatpakSandbox {
   void OnSpawnExitedSignal(dbus::Signal* signal);
 
   base::ProcessId Spawn(const base::CommandLine& cmdline,
-                        const base::LaunchOptions& launch_options);
+                        const base::LaunchOptions& launch_options,
+                        const SpawnOptions& spawn_options);
   void SpawnOnBusThread(base::ProcessId* out_external_pid,
                         base::WaitableEvent* event,
-                        const base::CommandLine& cmdline,
-                        const base::LaunchOptions& launch_options);
+                        const base::CommandLine* cmdline,
+                        const base::LaunchOptions* launch_options,
+                        const SpawnOptions* spawn_options);
   void OnSpawnResponse(base::ProcessId* out_external_pid,
                        base::WaitableEvent* event,
                        dbus::Response* response,

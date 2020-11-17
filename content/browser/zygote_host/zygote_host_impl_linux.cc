@@ -10,14 +10,20 @@
 
 #include "base/allocator/allocator_extension.h"
 #include "base/files/file_enumerator.h"
+#include "base/files/file_util.h"
 #include "base/logging.h"
+#include "base/nix/xdg_util.h"
+#include "base/path_service.h"
 #include "base/posix/unix_domain_socket.h"
 #include "base/process/kill.h"
 #include "base/process/launch.h"
 #include "base/process/memory.h"
 #include "base/strings/string_number_conversions.h"
 #include "build/build_config.h"
+#include "chrome/common/chrome_paths.h"  // nogncheck
 #include "content/common/zygote/zygote_commands_linux.h"
+#include "content/public/common/cdm_info.h"
+#include "content/public/common/content_client.h"
 #include "sandbox/linux/services/credentials.h"
 #include "sandbox/linux/services/flatpak_sandbox.h"
 #include "sandbox/linux/services/namespace_sandbox.h"
@@ -25,6 +31,7 @@
 #include "sandbox/linux/suid/common/sandbox.h"
 #include "sandbox/policy/linux/sandbox_linux.h"
 #include "sandbox/policy/switches.h"
+#include "third_party/widevine/cdm/buildflags.h"  // nogncheck
 
 namespace content {
 
@@ -177,8 +184,51 @@ pid_t ZygoteHostImpl::LaunchZygote(
   if (is_sandboxed_zygote && use_namespace_sandbox_) {
     process = sandbox::NamespaceSandbox::LaunchProcess(*cmd_line, options);
   } else if (is_sandboxed_zygote && use_flatpak_sandbox_) {
-    process = sandbox::FlatpakSandbox::GetInstance()->LaunchProcess(*cmd_line,
-                                                                    options);
+    sandbox::FlatpakSandbox::SpawnOptions spawn_options;
+
+#if BUILDFLAG(ENABLE_LIBRARY_CDMS)
+    // Expose the CDM paths into the sandbox. This is similar to PreSandboxInit
+    // in content_main_runner_impl.cc.
+    std::vector<CdmInfo> cdms;
+    GetContentClient()->AddContentDecryptionModules(&cdms, nullptr);
+    for (const auto& cdm : cdms) {
+      if (!spawn_options.ExposePathRo(cdm.path)) {
+        LOG(ERROR) << "Failed to expose CDM module";
+      }
+    }
+#endif
+
+#if BUILDFLAG(ENABLE_WIDEVINE_CDM_COMPONENT)
+    // Make sure we also expose the full Widevine CDM folder so it can be
+    // detected.
+    // TODO: Remove the explicit dependencies on chrome::.
+    base::FilePath widevine_cdm_path;
+    if (!base::PathService::Get(chrome::DIR_COMPONENT_UPDATED_WIDEVINE_CDM,
+                                &widevine_cdm_path)) {
+      LOG(ERROR) << "Failed to get Widevine CDM folder for sandbox forwarding";
+    }
+
+    LOG(INFO) << "Widevine CDM path IS: " << widevine_cdm_path;
+
+    if (!widevine_cdm_path.empty() && base::PathExists(widevine_cdm_path)) {
+      if (!spawn_options.ExposePathRo(widevine_cdm_path)) {
+        LOG(ERROR) << "Failed to expose updated Widevine CDM path";
+      }
+    }
+
+    // The Widevine data is found relative to $XDG_CONFIG_HOME, which is not set
+    // by default when running a sandboxed process.
+    auto env = base::Environment::Create();
+    base::FilePath xdgConfigHome = base::nix::GetXDGDirectory(
+        env.get(), base::nix::kXdgConfigHomeEnvVar, nullptr);
+    if (!xdgConfigHome.empty()) {
+      options.environment[base::nix::kXdgConfigHomeEnvVar] =
+          xdgConfigHome.value();
+    }
+#endif
+
+    process = sandbox::FlatpakSandbox::GetInstance()->LaunchProcess(
+        *cmd_line, options, spawn_options);
   } else {
     process = base::LaunchProcess(*cmd_line, options);
   }
