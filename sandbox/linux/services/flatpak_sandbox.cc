@@ -4,6 +4,7 @@
 
 #include "sandbox/linux/services/flatpak_sandbox.h"
 
+#include <fcntl.h>
 #include <signal.h>
 #include <sstream>
 #include <string>
@@ -94,6 +95,18 @@ enum FlatpakSpawnSandboxFlags {
   kFlatpakSpawnSandbox_ShareA11yBus = 1 << 4,
 };
 
+bool FlatpakSandbox::SpawnOptions::ExposePathRo(base::FilePath path) {
+  base::ScopedFD fd(
+      HANDLE_EINTR(open(path.value().c_str(), O_PATH | O_NOFOLLOW)));
+  if (!fd.is_valid()) {
+    PLOG(ERROR) << "Failed to expose path " << path;
+    return false;
+  }
+
+  sandbox_expose_ro.push_back(std::move(fd));
+  return true;
+}
+
 FlatpakSandbox::FlatpakSandbox()
     : bus_thread_("FlatpakPortalBus"), process_info_cv_(&process_info_lock_) {}
 
@@ -170,8 +183,9 @@ bool FlatpakSandbox::IsPidSandboxed(base::ProcessId relative_pid) {
 
 base::Process FlatpakSandbox::LaunchProcess(
     const base::CommandLine& cmdline,
-    const base::LaunchOptions& launch_options) {
-  base::ProcessId external_pid = Spawn(cmdline, launch_options);
+    const base::LaunchOptions& launch_options,
+    const SpawnOptions& spawn_options /*= {}*/) {
+  base::ProcessId external_pid = Spawn(cmdline, launch_options, spawn_options);
   if (external_pid == base::kNullProcessId) {
     return base::Process();
   }
@@ -365,9 +379,9 @@ void FlatpakSandbox::OnSpawnExitedSignal(dbus::Signal* signal) {
   process_info_cv_.Broadcast();
 }
 
-base::ProcessId FlatpakSandbox::Spawn(
-    const base::CommandLine& cmdline,
-    const base::LaunchOptions& launch_options) {
+base::ProcessId FlatpakSandbox::Spawn(const base::CommandLine& cmdline,
+                                      const base::LaunchOptions& launch_options,
+                                      const SpawnOptions& spawn_options) {
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
   base::ScopedAllowBaseSyncPrimitives allow_wait;
@@ -393,24 +407,26 @@ base::ProcessId FlatpakSandbox::Spawn(
       FROM_HERE,
       base::BindOnce(&FlatpakSandbox::SpawnOnBusThread, base::Unretained(this),
                      base::Unretained(&external_pid), base::Unretained(&event),
-                     cmdline, launch_options));
+                     base::Unretained(&cmdline),
+                     base::Unretained(&launch_options),
+                     base::Unretained(&spawn_options)));
   event.Wait();
 
   return external_pid;
 }
 
-void FlatpakSandbox::SpawnOnBusThread(
-    base::ProcessId* out_external_pid,
-    base::WaitableEvent* event,
-    const base::CommandLine& cmdline,
-    const base::LaunchOptions& launch_options) {
+void FlatpakSandbox::SpawnOnBusThread(base::ProcessId* out_external_pid,
+                                      base::WaitableEvent* event,
+                                      const base::CommandLine* cmdline,
+                                      const base::LaunchOptions* launch_options,
+                                      const SpawnOptions* spawn_options) {
   dbus::ObjectProxy* object_proxy = GetPortalObjectProxy();
   dbus::MethodCall method_call(kFlatpakPortalInterfaceName, "Spawn");
   dbus::MessageWriter writer(&method_call);
 
   const base::FilePath& current_directory =
-      !launch_options.current_directory.empty()
-          ? launch_options.current_directory
+      !launch_options->current_directory.empty()
+          ? launch_options->current_directory
           // Change to /app since it's guaranteed to always be present in
           // the sandbox.
           : kFlatpakAppPath;
@@ -419,7 +435,7 @@ void FlatpakSandbox::SpawnOnBusThread(
   dbus::MessageWriter argv_writer(nullptr);
   writer.OpenArray("ay", &argv_writer);
 
-  for (const std::string& arg : cmdline.argv()) {
+  for (const std::string& arg : cmdline->argv()) {
     WriteStringAsByteArray(&argv_writer, arg);
   }
 
@@ -441,7 +457,7 @@ void FlatpakSandbox::SpawnOnBusThread(
   WriteFdPairMap(&fds_writer, STDOUT_FILENO, STDOUT_FILENO);
   WriteFdPairMap(&fds_writer, STDERR_FILENO, STDERR_FILENO);
 
-  for (const auto& pair : launch_options.fds_to_remap) {
+  for (const auto& pair : launch_options->fds_to_remap) {
     WriteFdPairMap(&fds_writer, pair.first, pair.second);
   }
 
@@ -450,7 +466,7 @@ void FlatpakSandbox::SpawnOnBusThread(
   dbus::MessageWriter env_writer(nullptr);
   writer.OpenArray("{ss}", &env_writer);
 
-  for (const auto& pair : launch_options.environment) {
+  for (const auto& pair : launch_options->environment) {
     dbus::MessageWriter entry_writer(nullptr);
     env_writer.OpenDictEntry(&entry_writer);
 
@@ -474,11 +490,11 @@ void FlatpakSandbox::SpawnOnBusThread(
 #else
 #endif
 
-  if (launch_options.clear_environment) {
+  if (launch_options->clear_environment) {
     spawn_flags |= kFlatpakSpawn_ClearEnvironment;
   }
 
-  if (launch_options.kill_on_parent_death) {
+  if (launch_options->kill_on_parent_death) {
     spawn_flags |= kFlatpakSpawn_WatchBus;
   }
 
@@ -486,6 +502,28 @@ void FlatpakSandbox::SpawnOnBusThread(
 
   dbus::MessageWriter options_writer(nullptr);
   writer.OpenArray("{sv}", &options_writer);
+
+  if (!spawn_options->sandbox_expose_ro.empty()) {
+    dbus::MessageWriter entry_writer(nullptr);
+    options_writer.OpenDictEntry(&entry_writer);
+
+    entry_writer.AppendString("sandbox-expose-fd-ro");
+
+    dbus::MessageWriter variant_writer(nullptr);
+    entry_writer.OpenVariant("ah", &variant_writer);
+
+    dbus::MessageWriter fds_writer(nullptr);
+    variant_writer.OpenArray("h", &fds_writer);
+
+    for (const base::ScopedFD& fd : spawn_options->sandbox_expose_ro) {
+      CHECK(fd.is_valid()) << "Invalid spawn expose fd";
+      fds_writer.AppendFileDescriptor(fd.get());
+    }
+
+    variant_writer.CloseContainer(&fds_writer);
+    entry_writer.CloseContainer(&variant_writer);
+    options_writer.CloseContainer(&entry_writer);
+  }
 
   if (sandbox_flags != 0) {
     dbus::MessageWriter entry_writer(nullptr);
