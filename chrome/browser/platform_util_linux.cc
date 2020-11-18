@@ -2,9 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "chrome/browser/platform_util.h"
+#include <fcntl.h>
 
 #include "base/bind.h"
+#include "base/feature_list.h"
+#include "base/files/scoped_file.h"
 #include "base/no_destructor.h"
 #include "base/process/kill.h"
 #include "base/process/launch.h"
@@ -18,9 +20,12 @@
 #include "content/public/browser/notification_observer.h"
 #include "content/public/browser/notification_registrar.h"
 #include "content/public/browser/notification_service.h"
+#include "content/public/common/content_features.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
+#include "dbus/object_path.h"
 #include "dbus/object_proxy.h"
+#include "ui/gtk/select_file_dialog_impl_portal.h"
 #include "url/gurl.h"
 
 using content::BrowserThread;
@@ -33,6 +38,12 @@ const char kFreedesktopFileManagerName[] = "org.freedesktop.FileManager1";
 const char kFreedesktopFileManagerPath[] = "/org/freedesktop/FileManager1";
 
 const char kMethodShowItems[] = "ShowItems";
+
+const char kXdgPortalService[] = "org.freedesktop.portal.Desktop";
+const char kXdgPortalPath[] = "/org/freedesktop/portal/desktop";
+const char kOpenURIInterface[] = "org.freedesktop.portal.OpenURI";
+
+const char kMethodOpenDirectory[] = "OpenDirectory";
 
 class ShowItemHelper : public content::NotificationObserver {
  public:
@@ -58,7 +69,7 @@ class ShowItemHelper : public content::NotificationObserver {
     if (bus_)
       bus_->ShutdownOnDBusThreadAndBlock();
     bus_.reset();
-    filemanager_proxy_ = nullptr;
+    object_proxy_ = nullptr;
   }
 
   void ShowItemInFolder(Profile* profile, const base::FilePath& full_path) {
@@ -71,8 +82,48 @@ class ShowItemHelper : public content::NotificationObserver {
       bus_ = base::MakeRefCounted<dbus::Bus>(bus_options);
     }
 
-    if (!filemanager_proxy_) {
-      filemanager_proxy_ =
+    if (base::FeatureList::IsEnabled(features::kXdgFileChooserPortal)) {
+      ShowItemInFolderUsingXdgPortal(profile, full_path);
+    } else {
+      ShowItemInFolderUsingFileManager(profile, full_path);
+    }
+  }
+
+  void ShowItemInFolderUsingXdgPortal(Profile* profile,
+                                      const base::FilePath& full_path) {
+    if (!object_proxy_) {
+      object_proxy_ = bus_->GetObjectProxy(kXdgPortalService,
+                                           dbus::ObjectPath(kXdgPortalPath));
+    }
+
+    base::ScopedFD fd(open(full_path.value().c_str(), O_RDONLY | O_CLOEXEC));
+    if (!fd.is_valid()) {
+      PLOG(ERROR) << "Failed to open " << full_path.value();
+      // At least open the parent folder if possible.
+      OpenItem(profile, full_path.DirName(), OPEN_FOLDER,
+               OpenOperationCallback());
+      return;
+    }
+
+    dbus::MethodCall open_directory_call(kOpenURIInterface,
+                                         kMethodOpenDirectory);
+    dbus::MessageWriter writer(&open_directory_call);
+
+    writer.AppendString("");  // parent window
+    writer.AppendFileDescriptor(fd.get());
+
+    dbus::MessageWriter options_writer(nullptr);
+    writer.OpenArray("{sv}", &options_writer);
+    writer.CloseContainer(&options_writer);
+
+    PerformBusCall(&open_directory_call, profile, full_path);
+  }
+
+ private:
+  void ShowItemInFolderUsingFileManager(Profile* profile,
+                                        const base::FilePath& full_path) {
+    if (!object_proxy_) {
+      object_proxy_ =
           bus_->GetObjectProxy(kFreedesktopFileManagerName,
                                dbus::ObjectPath(kFreedesktopFileManagerPath));
     }
@@ -85,26 +136,33 @@ class ShowItemHelper : public content::NotificationObserver {
         {"file://" + full_path.value()});  // List of file(s) to highlight.
     writer.AppendString({});               // startup-id
 
+    PerformBusCall(&show_items_call, profile, full_path);
+  }
+
+  void PerformBusCall(dbus::MethodCall* call,
+                      Profile* profile,
+                      const base::FilePath& full_path) {
     // Skip opening the folder during browser tests, to avoid leaving an open
     // file explorer window behind.
     if (!internal::AreShellOperationsAllowed())
       return;
 
-    filemanager_proxy_->CallMethod(
-        &show_items_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
+    object_proxy_->CallMethod(
+        call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
         base::BindOnce(&ShowItemHelper::ShowItemInFolderResponse,
-                       weak_ptr_factory_.GetWeakPtr(), profile, full_path));
+                       weak_ptr_factory_.GetWeakPtr(), profile,
+                       call->GetMember(), full_path));
   }
 
- private:
   void ShowItemInFolderResponse(Profile* profile,
+                                const std::string& method,
                                 const base::FilePath& full_path,
                                 dbus::Response* response) {
     if (response)
       return;
 
-    LOG(ERROR) << "Error calling " << kMethodShowItems;
-    // If the FileManager1 call fails, at least open the parent folder.
+    LOG(ERROR) << "Error calling " << method;
+    // If the method call fails, at least open the parent folder.
     OpenItem(profile, full_path.DirName(), OPEN_FOLDER,
              OpenOperationCallback());
   }
@@ -112,7 +170,7 @@ class ShowItemHelper : public content::NotificationObserver {
   content::NotificationRegistrar registrar_;
 
   scoped_refptr<dbus::Bus> bus_;
-  dbus::ObjectProxy* filemanager_proxy_ = nullptr;
+  dbus::ObjectProxy* object_proxy_ = nullptr;
 
   base::WeakPtrFactory<ShowItemHelper> weak_ptr_factory_{this};
 };
