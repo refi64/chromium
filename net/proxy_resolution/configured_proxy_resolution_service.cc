@@ -52,6 +52,7 @@
 // of lacros-chrome is complete.
 #elif defined(OS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
 #include "net/proxy_resolution/proxy_config_service_linux.h"
+#include "net/proxy_resolution/proxy_resolver_linux.h"
 #elif defined(OS_ANDROID)
 #include "net/proxy_resolution/proxy_config_service_android.h"
 #endif
@@ -264,6 +265,8 @@ class ProxyResolverFactoryForSystem : public MultiThreadedProxyResolverFactory {
     return std::make_unique<ProxyResolverFactoryWinHttp>();
 #elif defined(OS_APPLE)
     return std::make_unique<ProxyResolverFactoryMac>();
+#elif defined(OS_LINUX)
+    return std::make_unique<ProxyResolverFactoryLinux>();
 #else
     NOTREACHED();
     return nullptr;
@@ -271,7 +274,7 @@ class ProxyResolverFactoryForSystem : public MultiThreadedProxyResolverFactory {
   }
 
   static bool IsSupported() {
-#if defined(OS_WIN) || defined(OS_APPLE)
+#if defined(OS_WIN) || defined(OS_APPLE) || defined(OS_LINUX)
     return true;
 #else
     return false;

@@ -31,6 +31,7 @@
 #include "base/threading/thread_restrictions.h"
 #include "base/timer/timer.h"
 #include "net/base/proxy_server.h"
+#include "sandbox/linux/services/flatpak_sandbox.h"
 
 #if defined(USE_GIO)
 #include <gio/gio.h>
@@ -1042,11 +1043,18 @@ ProxyConfigServiceLinux::Delegate::GetConfigFromSettings() {
   ProxyConfig config;
 
   std::string mode;
-  if (!setting_getter_->GetString(SettingGetter::PROXY_MODE, &mode)) {
+  bool use_flatpak_sandbox = (sandbox::FlatpakSandbox::GetInstance()->GetSandboxLevel() >
+                              sandbox::FlatpakSandbox::SandboxLevel::kNone);
+
+  if (!use_flatpak_sandbox &&
+      !setting_getter_->GetString(SettingGetter::PROXY_MODE, &mode)) {
     // We expect this to always be set, so if we don't see it then we probably
     // have a gsettings problem, and so we don't have a valid proxy config.
     return base::nullopt;
+  } else if (use_flatpak_sandbox) {
+    mode = "auto";
   }
+
   if (mode == "none") {
     // Specifically specifies no proxy.
     return ProxyConfigWithAnnotation(

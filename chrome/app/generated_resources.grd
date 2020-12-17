@@ -9433,6 +9433,12 @@ Please help our engineers fix this problem. Tell us what happened right before y
 
           &lt;p&gt;But you can still configure via the command line.  Please see &lt;code&gt;man <ph name="PRODUCT_BINARY_NAME">$2<ex>google-chrome</ex></ph>&lt;/code&gt; for more information on flags and environment variables.&lt;/p&gt;
         </message>
+        <message name="IDS_ABOUT_LINUX_PROXY_CONFIG_FLATPAK_BODY" desc="HTML body of page shown on systems running with flatpak where system proxy configuration is unsupported.">
+          &lt;p&gt;The flatpak version of <ph name="PRODUCT_NAME">$1<ex>Google Chrome</ex></ph> does not support changing the system proxy settings. However, it does respect those settings.&lt;/p&gt;
+          &lt;p&gt;If you need to adjust the proxy settings, please do so through the configuration system of your desktop environment.&lt;/p&gt;
+
+          &lt;p&gt;You can also override your system proxy settings via the command line. Please see &lt;code&gt;man <ph name="PRODUCT_BINARY_NAME">$2<ex>google-chrome</ex></ph>&lt;/code&gt; for more information on flags and environment variables.&lt;/p&gt;
+        </message>
       </if>
 
       <message name="IDS_IMAGE_FILES" desc="The description of the image file extensions in the select file dialog.">

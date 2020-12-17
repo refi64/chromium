@@ -84,6 +84,7 @@
 #if defined(OS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
 #include "chrome/common/chrome_paths_internal.h"
 #include "chrome/grit/chromium_strings.h"
+#include "sandbox/linux/services/flatpak_sandbox.h"
 #include "ui/base/l10n/l10n_util.h"
 #endif  // defined(OS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
 
@@ -614,7 +615,13 @@ void SystemNetworkContextManager::ConfigureDefaultNetworkContextParams(
   // or if it does work, now.
   // Should be possible now that a private isolate is used.
   // http://crbug.com/474654
-  if (!command_line.HasSwitch(switches::kWinHttpProxyResolver)) {
+  bool use_system_proxy_resolver = command_line.HasSwitch(switches::kWinHttpProxyResolver);
+#if defined(OS_LINUX)
+  bool use_flatpak_sandbox = (sandbox::FlatpakSandbox::GetInstance()->GetSandboxLevel() >
+                              sandbox::FlatpakSandbox::SandboxLevel::kNone);
+  use_system_proxy_resolver |= use_flatpak_sandbox;
+#endif
+  if (!use_system_proxy_resolver) {
     if (command_line.HasSwitch(switches::kSingleProcess)) {
       LOG(ERROR) << "Cannot use V8 Proxy resolver in single process mode.";
     } else {

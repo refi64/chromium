@@ -94,6 +94,10 @@
 #include "third_party/cros_system_api/dbus/service_constants.h"
 #endif
 
+#if defined(OS_LINUX)
+#include "sandbox/linux/services/flatpak_sandbox.h"
+#endif
+
 using content::BrowserThread;
 
 namespace {
@@ -588,8 +592,16 @@ std::string AboutLinuxProxyConfig() {
   data.append("<style>body { max-width: 70ex; padding: 2ex 5ex; }</style>");
   AppendBody(&data);
   base::FilePath binary = base::CommandLine::ForCurrentProcess()->GetProgram();
+
+  int id = IDS_ABOUT_LINUX_PROXY_CONFIG_BODY;
+#if defined(OS_LINUX)
+  bool use_flatpak_sandbox = (sandbox::FlatpakSandbox::GetInstance()->GetSandboxLevel() >
+                              sandbox::FlatpakSandbox::SandboxLevel::kNone);
+  if (use_flatpak_sandbox)
+    id = IDS_ABOUT_LINUX_PROXY_CONFIG_FLATPAK_BODY;
+#endif
   data.append(
-      l10n_util::GetStringFUTF8(IDS_ABOUT_LINUX_PROXY_CONFIG_BODY,
+      l10n_util::GetStringFUTF8(id,
                                 l10n_util::GetStringUTF16(IDS_PRODUCT_NAME),
                                 base::ASCIIToUTF16(binary.BaseName().value())));
   AppendFooter(&data);
