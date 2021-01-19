@@ -861,7 +861,7 @@ bool IsVideoCaptureAcceleratedJpegDecodingEnabled() {
           switches::kUseFakeMjpegDecodeAccelerator)) {
     return true;
   }
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS_ASH) || (defined(OS_LINUX) && !defined(OS_ANDROID))
   return true;
 #endif
   return false;

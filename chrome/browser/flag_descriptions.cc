@@ -3693,6 +3693,16 @@ const char kVideoToolboxVp9DecodingDescription[] =
 
 #endif
 
+#if BUILDFLAG(IS_CHROMEOS_ASH) || (defined(OS_LINUX) && !defined(OS_ANDROID))
+
+const char kAcceleratedMjpegDecodeName[] =
+    "Hardware-accelerated mjpeg decode for captured frame";
+const char kAcceleratedMjpegDecodeDescription[] =
+    "Enable hardware-accelerated mjpeg decode for captured frame where "
+    "available.";
+
+#endif
+
 // Chrome OS -------------------------------------------------------------------
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -3703,12 +3713,6 @@ const char kAccountManagementFlowsV2Description[] =
     "Enables redesign of account management flows and Account Manager page in "
     "Settings. "
     "See go/betterAM";
-
-const char kAcceleratedMjpegDecodeName[] =
-    "Hardware-accelerated mjpeg decode for captured frame";
-const char kAcceleratedMjpegDecodeDescription[] =
-    "Enable hardware-accelerated mjpeg decode for captured frame where "
-    "available.";
 
 const char kAllowDisableMouseAccelerationName[] =
     "Allow disabling mouse acceleration";
