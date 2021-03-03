@@ -88,10 +88,9 @@ namespace base {
 //
 // Note: You should almost always use the SequenceChecker class (through the
 // above macros) to get the right version for your build configuration.
-// Note: This is marked with "context" capability in order to support
-// thread_annotations.h.
-class THREAD_ANNOTATION_ATTRIBUTE__(capability("context"))
-    SequenceCheckerDoNothing {
+// Note: This is only a check, not a "lock". It is marked "LOCKABLE" only in
+// order to support thread_annotations.h.
+class LOCKABLE SequenceCheckerDoNothing {
  public:
   SequenceCheckerDoNothing() = default;
 
@@ -108,9 +107,11 @@ class THREAD_ANNOTATION_ATTRIBUTE__(capability("context"))
 };
 
 #if DCHECK_IS_ON()
-using SequenceChecker = SequenceCheckerImpl;
+class SequenceChecker : public SequenceCheckerImpl {
+};
 #else
-using SequenceChecker = SequenceCheckerDoNothing;
+class SequenceChecker : public SequenceCheckerDoNothing {
+};
 #endif  // DCHECK_IS_ON()
 
 class SCOPED_LOCKABLE ScopedValidateSequenceChecker {
